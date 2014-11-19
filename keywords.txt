@@ -1,0 +1,26 @@
+#######################################
+# Syntax Coloring Map For RestClient
+#######################################
+
+#######################################
+# Datatypes/Classes (KEYWORD1)
+#######################################
+
+RestClient	KEYWORD1
+
+#######################################
+# Methods and Functions (KEYWORD2)
+#######################################
+
+begin	KEYWORD2
+request	KEYWORD2
+readResponse	KEYWORD2
+setHeader	KEYWORD2
+get	KEYWORD2
+post	KEYWORD2
+put	KEYWORD2
+del	KEYWORD2
+
+#######################################
+# Constants (LITERAL1)
+#######################################

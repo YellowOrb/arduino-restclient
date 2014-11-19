@@ -1,53 +1,47 @@
+#ifndef rest_client_h
+#define rest_client_h
 #include <Arduino.h>
-#include <SPI.h>
-#include <Ethernet.h>
+#include <SIM900.h>
+
+enum HttpMethod_t {
+	GET,
+	POST,
+	PUT,
+	DELETE
+};
 
 class RestClient {
 
   public:
-    RestClient(const char* host);
-    RestClient(const char* _host, int _port);
-
-    //Client Setup
-    void dhcp();
-    int begin(byte*);
+    RestClient(SIM900Client *client, const char* host);
 
     //Generic HTTP Request
-    int request(const char* method, const char* path,
-                const char* body, String* response);
+    void request(HttpMethod_t method, const char* path, const char* body);
+		// read response from request, if String is NULL just returns the response code
+		int readResponse(String*);
     // Set a Request Header
     void setHeader(const char*);
+
     // GET path
-    int get(const char*);
-    // GET path and response
-    int get(const char*, String*);
+    void get(const char*);
 
     // POST path and body
-    int post(const char* path, const char* body);
-    // POST path and body and response
-    int post(const char* path, const char* body, String*);
+    void post(const char* path, const char* body);
 
     // PUT path and body
-    int put(const char* path, const char* body);
-    // PUT path and body and response
-    int put(const char* path, const char* body, String*);
+    void put(const char* path, const char* body);
 
     // DELETE path
-    int del(const char*);
+    void del(const char*);
     // DELETE path and body
-    int del(const char*, const char*);
-    // DELETE path and response
-    int del(const char*, String*);
-    // DELETE path and body and response
-    int del(const char*, const char*, String*);
-
+    void del(const char*, const char*);
+		
   private:
-    EthernetClient client;
-    int readResponse(String*);
+		const char *_host;
+    SIM900Client * _client;
     void write(const char*);
-    const char* host;
-    int port;
-    int num_headers;
-    const char* headers[10];
-    boolean contentTypeSet;
+    int _num_headers;
+    const char* _headers[10];
+    boolean _contentTypeSet;
 };
+#endif

@@ -8,160 +8,98 @@
 #define HTTP_DEBUG_PRINT(string)
 #endif
 
-RestClient::RestClient(const char* _host){
-  host = _host;
-  port = 80;
-  num_headers = 0;
-  contentTypeSet = false;
-}
-
-RestClient::RestClient(const char* _host, int _port){
-  host = _host;
-  port = _port;
-  num_headers = 0;
-  contentTypeSet = false;
-}
-
-void RestClient::dhcp(){
-  byte mac[] = { 0xDE, 0xAD, 0xBE, 0xEF, 0xFE, 0xED };
-  if (begin(mac) == 0) {
-    Serial.println("Failed to configure Ethernet using DHCP");
-  }
-  //give it time to initialize
-  delay(1000);
-}
-
-int RestClient::begin(byte mac[]){
-  return Ethernet.begin(mac);
-  //give it time to initialize
-  delay(1000);
+RestClient::RestClient(SIM900Client *client, const char * host){
+	_host = host;
+	_client = client;
+  _num_headers = 0;
+  _contentTypeSet = false;
 }
 
 // GET path
-int RestClient::get(const char* path){
-  return request("GET", path, NULL, NULL);
-}
-
-//GET path with response
-int RestClient::get(const char* path, String* response){
-  return request("GET", path, NULL, response);
+void RestClient::get(const char* path){
+  request(GET, path, NULL);
 }
 
 // POST path and body
-int RestClient::post(const char* path, const char* body){
-  return request("POST", path, body, NULL);
-}
-
-// POST path and body with response
-int RestClient::post(const char* path, const char* body, String* response){
-  return request("POST", path, body, response);
+void RestClient::post(const char* path, const char* body){
+  request(POST, path, body);
 }
 
 // PUT path and body
-int RestClient::put(const char* path, const char* body){
-  return request("PUT", path, body, NULL);
-}
-
-// PUT path and body with response
-int RestClient::put(const char* path, const char* body, String* response){
-  return request("PUT", path, body, response);
+void RestClient::put(const char* path, const char* body){
+  request(PUT, path, body);
 }
 
 // DELETE path
-int RestClient::del(const char* path){
-  return request("DELETE", path, NULL, NULL);
-}
-
-// DELETE path and response
-int RestClient::del(const char* path, String* response){
-  return request("DELETE", path, NULL, response);
+void RestClient::del(const char* path){
+  request(DELETE, path, NULL);
 }
 
 // DELETE path and body
-int RestClient::del(const char* path, const char* body ){
-  return request("DELETE", path, body, NULL);
-}
-
-// DELETE path and body with response
-int RestClient::del(const char* path, const char* body, String* response){
-  return request("DELETE", path, body, response);
+void RestClient::del(const char* path, const char* body ){
+  request(DELETE, path, body);
 }
 
 void RestClient::write(const char* string){
   HTTP_DEBUG_PRINT(string);
-  client.print(string);
 }
 
 void RestClient::setHeader(const char* header){
-  headers[num_headers] = header;
-  num_headers++;
+  _headers[_num_headers] = header;
+  _num_headers++;
 }
 
 // The mother- generic request method.
 //
-int RestClient::request(const char* method, const char* path,
-                  const char* body, String* response){
-
-  HTTP_DEBUG_PRINT("HTTP: connect\n");
-
-  if(client.connect(host, port)){
-    HTTP_DEBUG_PRINT("HTTP: connected\n");
-    HTTP_DEBUG_PRINT("REQUEST: \n");
-    // Make a HTTP request line:
-    write(method);
-    write(" ");
-    write(path);
-    write(" HTTP/1.1\r\n");
-    for(int i=0; i<num_headers; i++){
-      write(headers[i]);
-      write("\r\n");
-    }
-    write("Host: ");
-    write(host);
-    write("\r\n");
-    write("Connection: close\r\n");
-
-    if(body != NULL){
-      char contentLength[30];
-      sprintf(contentLength, "Content-Length: %d\r\n", strlen(body));
-      write(contentLength);
-
-      if(!contentTypeSet){
-        write("Content-Type: application/x-www-form-urlencoded\r\n");
-      }
-    }
-
-    write("\r\n");
-
-    if(body != NULL){
-      write(body);
-      write("\r\n");
-      write("\r\n");
-    }
-
-    //make sure you write all those bytes.
-    delay(100);
-
-    HTTP_DEBUG_PRINT("HTTP: call readResponse\n");
-    int statusCode = readResponse(response);
-    HTTP_DEBUG_PRINT("HTTP: return readResponse\n");
-
-    //cleanup
-    HTTP_DEBUG_PRINT("HTTP: stop client\n");
-    num_headers = 0;
-    client.stop();
-    delay(50);
-    HTTP_DEBUG_PRINT("HTTP: client stopped\n");
-
-    return statusCode;
-  }else{
-    HTTP_DEBUG_PRINT("HTTP Connection failed\n");
-    return 0;
+void RestClient::request(HttpMethod_t method, const char* path, const char* body){
+  HTTP_DEBUG_PRINT("REQUEST: \n");
+  // Make a HTTP request line:
+	switch(method) {
+		case GET:
+			_client->print(F("GET"));
+			break;
+		case POST:
+			_client->print(F("POST"));
+			break;
+		case PUT:
+			_client->print(F("PUT"));
+			break;
+		case DELETE:
+			_client->print(F("DELETE"));
+			break;	
+	}
+  _client->print(' ');
+  _client->print(path);
+  _client->println(F(" HTTP/1.1"));
+  for(int i=0; i<_num_headers; i++){
+     _client->println(_headers[i]);
   }
+  _client->print(F("Host: "));
+  _client->println(_host);
+  _client->println(F("Connection: close"));
+
+  if(body != NULL){
+		_client->print(F("Content-Length: "));
+		_client->println(strlen(body));
+
+    if(!_contentTypeSet){
+      _client->println(F("Content-Type: application/x-www-form-urlencoded"));
+    }
+  }
+
+  _client->println();
+
+  if(body != NULL){
+    _client->println(body);
+  	_client->println();
+  }
+
+  //make sure you write all those bytes.
+  delay(100);
 }
 
 int RestClient::readResponse(String* response) {
-
+	long _startTime = millis();
   // an http request ends with a blank line
   boolean currentLineIsBlank = true;
   boolean httpBody = false;
@@ -178,12 +116,12 @@ int RestClient::readResponse(String* response) {
   }
 
   HTTP_DEBUG_PRINT("HTTP: RESPONSE: \n");
-  while (client.connected()) {
+  while (_client->connected()) {
     HTTP_DEBUG_PRINT(".");
-    if (client.available()) {
+    if (_client->available()) {
       HTTP_DEBUG_PRINT(",");
 
-      char c = client.read();
+      char c = _client->read();
       HTTP_DEBUG_PRINT(c);
 
       if(c == ' ' && !inStatus){
@@ -219,6 +157,9 @@ int RestClient::readResponse(String* response) {
         currentLineIsBlank = false;
       }
     }
+		if( (millis() - _startTime) > 2000) {
+		  break; ; // timed out
+		}
   }
 
   HTTP_DEBUG_PRINT("HTTP: return readResponse3\n");
