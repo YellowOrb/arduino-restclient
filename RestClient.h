@@ -3,45 +3,34 @@
 #include <Arduino.h>
 #include <SIM900.h>
 
-enum HttpMethod_t {
+typedef enum {
 	GET,
 	POST,
 	PUT,
 	DELETE
-};
+} HttpMethod_t;
 
 class RestClient {
 
   public:
-    RestClient(SIM900Client *client, const char* host);
+    RestClient(SIM900Client *client, char *buffer, size_t bufferSize);
+
+		char* initialize(HttpMethod_t method, char* path);
+		
+		// Add a Request Header
+    char* addHeader(const char*);
 
     //Generic HTTP Request
-    void request(HttpMethod_t method, const char* path, const char* body);
-		// read response from request, if String is NULL just returns the response code
-		int readResponse(String*);
-    // Set a Request Header
-    void setHeader(const char*);
+    void execute(const char *host, const char* body=NULL, size_t bodySize=0, bool keepAlive=true);
 
-    // GET path
-    void get(const char*);
-
-    // POST path and body
-    void post(const char* path, const char* body);
-
-    // PUT path and body
-    void put(const char* path, const char* body);
-
-    // DELETE path
-    void del(const char*);
-    // DELETE path and body
-    void del(const char*, const char*);
+		// read response from request
+		int readResponse(char *response, size_t responseSize, char *headerPtrs[]=NULL, size_t headerSizes[]=NULL, uint8_t headers=0);
 		
   private:
-		const char *_host;
+
     SIM900Client * _client;
-    void write(const char*);
-    int _num_headers;
-    const char* _headers[10];
+		char * _buffer;
+		size_t _bufferSize, _written = 0;
     boolean _contentTypeSet;
 };
 #endif

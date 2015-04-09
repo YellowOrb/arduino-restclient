@@ -1,86 +1,72 @@
 #include "RestClient.h"
 
-#ifdef HTTP_DEBUG
-#define HTTP_DEBUG_PRINT(string) (Serial.print(string))
-#endif
-
-#ifndef HTTP_DEBUG
-#define HTTP_DEBUG_PRINT(string)
-#endif
-
-RestClient::RestClient(SIM900Client *client, const char * host){
-	_host = host;
+RestClient::RestClient(SIM900Client *client, char *buffer, size_t bufferSize){
 	_client = client;
-  _num_headers = 0;
   _contentTypeSet = false;
+	_buffer = buffer;
+	_bufferSize = bufferSize;
 }
 
-// GET path
-void RestClient::get(const char* path){
-  request(GET, path, NULL);
-}
-
-// POST path and body
-void RestClient::post(const char* path, const char* body){
-  request(POST, path, body);
-}
-
-// PUT path and body
-void RestClient::put(const char* path, const char* body){
-  request(PUT, path, body);
-}
-
-// DELETE path
-void RestClient::del(const char* path){
-  request(DELETE, path, NULL);
-}
-
-// DELETE path and body
-void RestClient::del(const char* path, const char* body ){
-  request(DELETE, path, body);
-}
-
-void RestClient::write(const char* string){
-  HTTP_DEBUG_PRINT(string);
-}
-
-void RestClient::setHeader(const char* header){
-  _headers[_num_headers] = header;
-  _num_headers++;
-}
-
-// The mother- generic request method.
-//
-void RestClient::request(HttpMethod_t method, const char* path, const char* body){
-  HTTP_DEBUG_PRINT("REQUEST: \n");
-  // Make a HTTP request line:
+char *RestClient::initialize(HttpMethod_t method, char* path) {
+	// Make a HTTP request line:
 	switch(method) {
 		case GET:
-			_client->print(F("GET"));
+			strcpy_P(_buffer,PSTR("GET"));
 			break;
 		case POST:
-			_client->print(F("POST"));
+			strcpy_P(_buffer,PSTR("POST"));
 			break;
 		case PUT:
-			_client->print(F("PUT"));
+			strcpy_P(_buffer,PSTR("PUT"));
 			break;
 		case DELETE:
-			_client->print(F("DELETE"));
+			strcpy_P(_buffer,PSTR("DELETE"));
 			break;	
 	}
-  _client->print(' ');
-  _client->print(path);
-  _client->println(F(" HTTP/1.1"));
-  for(int i=0; i<_num_headers; i++){
-     _client->println(_headers[i]);
-  }
+	_written = strlen(_buffer);
+	
+	_buffer[_written++] = ' ';
+	_buffer[_written] = 0;
+	
+	strcat(_buffer, path);
+	strcat_P(_buffer, PSTR(" HTTP/1.1"));
+	
+	_written = strlen(_buffer);
+	_buffer[_written++] = '\r';
+	_buffer[_written++] = '\n';
+	_buffer[_written++] = '\0';
+
+	return _buffer;
+}
+
+char *RestClient::addHeader(const char* header){
+	if(_written + strlen_P(header) + 3 > _bufferSize) return NULL; // we cannot overwrite the buffer
+	strcat_P(_buffer, header);
+	if(!_contentTypeSet && strstr_P(_buffer, PSTR("Content-Type"))!=0) {
+		// we just wrote the Content-Type header
+		_contentTypeSet = true;
+	}
+	_written = strlen(_buffer);
+	_buffer[_written++] = '\r';
+	_buffer[_written++] = '\n';
+	_buffer[_written++] = '\0';
+	
+	return &_buffer[_written - strlen_P(header) - 2]; // return pointer to start of header if parts are needed to be changed, e.g. write time and date into Date: 
+}
+
+void RestClient::execute(const char *host, const char* body, size_t bodySize, bool keepAlive){
+	_client->print(_buffer);
   _client->print(F("Host: "));
-  _client->println(_host);
-  _client->println(F("Connection: close"));
+  _client->println(host);
+	if(keepAlive) {
+		_client->println(F("Connection: Keep-Alive"));
+	} else {
+		_client->println(F("Connection: close"));
+	}
 
   if(body != NULL){
 		_client->print(F("Content-Length: "));
-		_client->println(strlen(body));
+		_client->println(bodySize);
 
     if(!_contentTypeSet){
       _client->println(F("Content-Type: application/x-www-form-urlencoded"));
@@ -90,78 +76,65 @@ void RestClient::request(HttpMethod_t method, const char* path, const char* body
   _client->println();
 
   if(body != NULL){
-    _client->println(body);
-  	_client->println();
+    _client->print(body);
   }
 
-  //make sure you write all those bytes.
+  //make sure we write all those bytes.
   delay(100);
 }
 
-int RestClient::readResponse(String* response) {
+int RestClient::readResponse(char* response, size_t responseSize, char* headerPtrs[], size_t headerSizes[], uint8_t headers) {
 	long _startTime = millis();
-  // an http request ends with a blank line
-  boolean currentLineIsBlank = true;
-  boolean httpBody = false;
-  boolean inStatus = false;
+  int responseCode = 0;
+	byte n = 0;
+	bool httpBody = false;
 
-  char statusCode[4];
-  int i = 0;
-  int code = 0;
-
-  if(response == NULL){
-    HTTP_DEBUG_PRINT("HTTP: NULL RESPONSE POINTER: \n");
-  }else{
-    HTTP_DEBUG_PRINT("HTTP: NON-NULL RESPONSE POINTER: \n");
+  if(response == NULL){ // we need a response buffer to read anything so cannot only parse the response code
+		return 0;
   }
 
-  HTTP_DEBUG_PRINT("HTTP: RESPONSE: \n");
-  while (_client->connected()) {
-    HTTP_DEBUG_PRINT(".");
-    if (_client->available()) {
-      HTTP_DEBUG_PRINT(",");
+  while (true) { // keep reading lines until we found bodys first line or timeout
+    if (_client->available() == 0) {
+			delay(10); // wait shortly until we get something to read
+		} else {
+			_client->readln((uint8_t *)response, responseSize);
 
-      char c = _client->read();
-      HTTP_DEBUG_PRINT(c);
+			if(httpBody) {
+				// we have just read the http body, break out to return since that is what we are looking for
+				break;
+			}
+	
+			if(response[0]== '\0') { // an empty line indicates start of body
+				httpBody = true;
+			}
 
-      if(c == ' ' && !inStatus){
-        inStatus = true;
-      }
-
-      if(inStatus && i < 3 && c != ' '){
-        statusCode[i] = c;
-        i++;
-      }
-      if(i == 3){
-        statusCode[i] = '\0';
-        code = atoi(statusCode);
-      }
-
-      //only write response if its not null
-      if(httpBody){
-        if(response != NULL) response->concat(c);
-      }
-      if (c == '\n' && httpBody){
-        HTTP_DEBUG_PRINT("HTTP: return readResponse2\n");
-        return code;
-      }
-      if (c == '\n' && currentLineIsBlank) {
-        httpBody = true;
-      }
-      if (c == '\n') {
-        // you're starting a new lineu
-        currentLineIsBlank = true;
-      }
-      else if (c != '\r') {
-        // you've gotten a character on the current line
-        currentLineIsBlank = false;
-      }
-    }
+			if (0 == n++) {
+				// first line, parse response code, RFC 2616, section 6.1
+				// HTTP-Version SP Status-Code SP Reason-Phrase CRLF
+				// HTTP/1.x
+				char *statusStart = strchr(response, ' ')+1; // response points at start of Status-Code
+				char *statusEnd = strchr(statusStart, ' ');
+				statusEnd = '\0'; // end the string
+				responseCode = atoi(statusStart);
+			} else {
+				if(headers !=0) {
+					int i;
+					for(i=0;i<headers;i++) {
+						if(headerPtrs[i] != NULL && strncmp(response, headerPtrs[i], strlen(headerPtrs[i])) == 0) {
+							// found the header, copy the whole header to the header str
+							strlcpy(headerPtrs[i], response, headerSizes[i]);
+						}
+					}
+				}
+			}
+			if(255 == n) { // we cannot handle more than 255 lines, break!
+				break;
+			}
+		}
 		if( (millis() - _startTime) > 2000) {
 		  break; ; // timed out
 		}
   }
 
-  HTTP_DEBUG_PRINT("HTTP: return readResponse3\n");
-  return code;
+  return responseCode;
 }
