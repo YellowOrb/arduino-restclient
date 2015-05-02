@@ -131,7 +131,7 @@ int RestClient::readResponse(char* response, size_t responseSize, char* headerPt
 				break;
 			}
 		}
-		if( (millis() - _startTime) > 2000) {
+		if( (millis() - _startTime) > 20000) { // heroku for instance can take up to 16 seconds to restart a dyno
 		  break; ; // timed out
 		}
   }
