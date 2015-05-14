@@ -27,7 +27,6 @@ class RestClient {
 		int readResponse(char *response, size_t responseSize, char *headerPtrs[]=NULL, size_t headerSizes[]=NULL, uint8_t headers=0);
 		
   private:
-
     SIM900Client * _client;
 		char * _buffer;
 		size_t _bufferSize, _written = 0;
