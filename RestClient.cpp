@@ -88,7 +88,9 @@ int RestClient::readResponse(char* response, size_t responseSize, char* headerPt
   int responseCode = 0;
 	byte n = 0;
 	bool httpBody = false;
-
+	bool chunkedBody = false; // handles chunked bodies partially, will only read first chunk and return it
+	long chunkSize = 0;
+	
   if(response == NULL){ // we need a response buffer to read anything so cannot only parse the response code
 		return 0;
   }
@@ -98,10 +100,13 @@ int RestClient::readResponse(char* response, size_t responseSize, char* headerPt
 			delay(10); // wait shortly until we get something to read
 		} else {
 			_client->readln((uint8_t *)response, responseSize);
-
 			if(httpBody) {
-				// we have just read the http body, break out to return since that is what we are looking for
-				break;
+				if(chunkedBody && chunkSize == 0) {
+					chunkSize = strtol(response, NULL, 16); // currently only use the chunksize to determined that we have read it
+				} else {
+					// we have just read the http body, break out to return since that is what we are looking for
+					break;
+				}
 			}
 	
 			if(response[0]== '\0') { // an empty line indicates start of body
@@ -117,7 +122,9 @@ int RestClient::readResponse(char* response, size_t responseSize, char* headerPt
 				statusEnd = '\0'; // end the string
 				responseCode = atoi(statusStart);
 			} else {
-				if(headers !=0) {
+				if(strncmp_P(response, PSTR("Transfer-Encoding:"), 18) == 0) {
+					chunkedBody = strncmp_P(&response[19], PSTR("chunked"), 7) == 0;
+				} else if(headers !=0) {
 					int i;
 					for(i=0;i<headers;i++) {
 						if(headerPtrs[i] != NULL && strncmp(response, headerPtrs[i], strlen(headerPtrs[i])) == 0) {
