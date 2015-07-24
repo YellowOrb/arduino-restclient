@@ -2,6 +2,7 @@
 #define rest_client_h
 #include <Arduino.h>
 #include <SIM900.h>
+#include "version.h"
 
 typedef enum {
 	GET,
