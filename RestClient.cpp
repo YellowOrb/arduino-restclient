@@ -1,4 +1,5 @@
 #include "RestClient.h"
+#include <avr/wdt.h>
 
 RestClient::RestClient(SIM900Client *client, char *buffer, size_t bufferSize){
 	_client = client;
@@ -96,6 +97,7 @@ int RestClient::readResponse(char* response, size_t responseSize, char* headerPt
   }
 
   while (true) { // keep reading lines until we found bodys first line or timeout
+		wdt_reset();
     if (_client->available() == 0) {
 			delay(10); // wait shortly until we get something to read
 		} else {
