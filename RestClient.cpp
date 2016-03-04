@@ -24,11 +24,7 @@ char *RestClient::initialize(HttpMethod_t method, char* path) {
 			strcpy_P(_buffer,PSTR("DELETE"));
 			break;	
 	}
-	_written = strlen(_buffer);
-	
-	_buffer[_written++] = ' ';
-	_buffer[_written] = 0;
-	
+	strcat_P(_buffer, PSTR(" "));
 	strcat(_buffer, path);
 	strcat_P(_buffer, PSTR(" HTTP/1.1"));
 	
@@ -53,6 +49,10 @@ char *RestClient::addHeader(const char* header){
 	_buffer[_written++] = '\0';
 	
 	return &_buffer[_written - strlen_P(header) - 2]; // return pointer to start of header if parts are needed to be changed, e.g. write time and date into Date: 
+}
+
+char *RestClient::getHeaders() {
+	return _buffer;
 }
 
 void RestClient::execute(const char *host, const char* body, size_t bodySize, bool keepAlive){

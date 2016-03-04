@@ -20,6 +20,8 @@ class RestClient {
 		
 		// Add a Request Header
     char* addHeader(const char*);
+		// get all currently added headers
+		char* getHeaders() ;
 
     //Generic HTTP Request
     void execute(const char *host, const char* body=NULL, size_t bodySize=0, bool keepAlive=true);

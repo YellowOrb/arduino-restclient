@@ -15,6 +15,7 @@ RestClient	KEYWORD1
 initialize	KEYWORD2
 readResponse	KEYWORD2
 addHeader	KEYWORD2
+getHeaders KEYWORD2
 execute	KEYWORD2
 
 #######################################
