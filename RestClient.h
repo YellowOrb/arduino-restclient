@@ -4,6 +4,8 @@
 #include <SIM900.h>
 #include "version.h"
 
+//#define DEBUG
+
 typedef enum {
 	GET,
 	POST,
@@ -28,6 +30,13 @@ class RestClient {
 
 		// read response from request
 		int readResponse(char *response, size_t responseSize, char *headerPtrs[]=NULL, size_t headerSizes[]=NULL, uint8_t headers=0);
+
+#ifdef DEBUG
+		char* setDebugSerial(Stream* debug);
+				
+	protected:
+		Stream* _debug = &Serial; // a possible output stream
+#endif
 		
   private:
     SIM900Client * _client;

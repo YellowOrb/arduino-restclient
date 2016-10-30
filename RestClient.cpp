@@ -8,6 +8,13 @@ RestClient::RestClient(SIM900Client *client, char *buffer, size_t bufferSize){
 	_bufferSize = bufferSize;
 }
 
+#ifdef DEBUG
+char *RestClient::setDebugSerial(Stream* debug){
+	_debug = debug;
+	_debug->println(F("RestClient debugging activated!"));
+}
+#endif
+
 char *RestClient::initialize(HttpMethod_t method, char* path) {
 	// Make a HTTP request line:
 	switch(method) {
@@ -101,17 +108,28 @@ int RestClient::readResponse(char* response, size_t responseSize, char* headerPt
     if (_client->available() == 0) {
 			delay(10); // wait shortly until we get something to read
 		} else {
-			_client->readln((uint8_t *)response, responseSize);
+			int read = _client->readln((uint8_t *)response, responseSize);
+#ifdef DEBUG
+			_debug->print(F("RestClient read "));
+			_debug->print(read);
+			_debug->println(F(" bytes of data."));
+#endif
 			if(httpBody) {
 				if(chunkedBody && chunkSize == 0) {
 					chunkSize = strtol(response, NULL, 16); // currently only use the chunksize to determined that we have read it
 				} else {
+#ifdef DEBUG
+					_debug->println(F("RestClient has read body."));
+#endif
 					// we have just read the http body, break out to return since that is what we are looking for
 					break;
 				}
 			}
 	
 			if(response[0]== '\0') { // an empty line indicates start of body
+#ifdef DEBUG
+				_debug->println(F("RestClient start of body."));
+#endif
 				httpBody = true;
 			}
 
@@ -123,13 +141,27 @@ int RestClient::readResponse(char* response, size_t responseSize, char* headerPt
 				char *statusEnd = strchr(statusStart, ' ');
 				statusEnd = '\0'; // end the string
 				responseCode = atoi(statusStart);
+#ifdef DEBUG
+				_debug->print(F("RestClient response code "));
+				_debug->print(responseCode);
+				_debug->println(F("."));
+#endif
 			} else {
 				if(strncmp_P(response, PSTR("Transfer-Encoding:"), 18) == 0) {
 					chunkedBody = strncmp_P(&response[19], PSTR("chunked"), 7) == 0;
+#ifdef DEBUG
+					_debug->print(F("RestClient chunked body '"));
+					_debug->print(response);
+					_debug->println(F("'."));
+#endif
 				} else if(headers !=0) {
 					int i;
 					for(i=0;i<headers;i++) {
 						if(headerPtrs[i] != NULL && strncmp(response, headerPtrs[i], strlen(headerPtrs[i])) == 0) {
+#ifdef DEBUG
+							_debug->print(F("RestClient read header "));
+							_debug->println(headerPtrs[i]);
+#endif							
 							// found the header, copy the whole header to the header str
 							strlcpy(headerPtrs[i], response, headerSizes[i]);
 						}
@@ -137,10 +169,16 @@ int RestClient::readResponse(char* response, size_t responseSize, char* headerPt
 				}
 			}
 			if(255 == n) { // we cannot handle more than 255 lines, break!
+#ifdef DEBUG
+				_debug->println(F("RestClient too many lines."));
+#endif
 				break;
 			}
 		}
 		if( (millis() - _startTime) > 20000) { // heroku for instance can take up to 16 seconds to restart a dyno
+#ifdef DEBUG
+			_debug->println(F("RestClient timeout on response."));
+#endif
 		  break; ; // timed out
 		}
   }
